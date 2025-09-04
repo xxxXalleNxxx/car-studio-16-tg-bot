@@ -33,6 +33,4 @@ build/
 
 # Properties files with sensitive data
 env.properties
-application.properties
-application-*.properties
 config.properties
