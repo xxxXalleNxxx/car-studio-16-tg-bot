@@ -6,12 +6,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.arapov.firstnormaltelegrambot.factories.KeyboardFactory;
+import ru.arapov.firstnormaltelegrambot.models.CartItem;
 import ru.arapov.firstnormaltelegrambot.models.Category;
 import ru.arapov.firstnormaltelegrambot.models.Item;
 import ru.arapov.firstnormaltelegrambot.repositories.CategoryRepository;
@@ -20,7 +25,9 @@ import ru.arapov.firstnormaltelegrambot.services.CartService;
 import ru.arapov.firstnormaltelegrambot.services.RegistryService;
 
 import java.math.BigDecimal;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static ru.arapov.firstnormaltelegrambot.factories.KeyboardFactory.getMainMenuKeyboard;
 
@@ -85,7 +92,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                     prepareAndSendMessage(chatId, "Такой команды нет!\nДля просмотра всех команд введите /help");
                     break;
             }
-
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
             long messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -130,6 +136,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                     executeEditMessageText("Все товары:", chatId, messageId,
                             keyboardFactory.createItemsByCategoriesKeyboard(-1L));
                     break;
+                case "process_payment":
+                    handleProcessPayment(userId, chatId);
+                    break;
+
+                case "cancel_payment":
+                    executeEditMessageText("Оплата отменена", chatId, messageId, getMainMenuKeyboard());
+                    break;
+//                case "test_payment":
+//                    handleTestPayment(userId, chatId);
+//                    break;
+
                 default:
                     if (callbackData.startsWith("item_detail_")) {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
@@ -141,8 +158,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
                         cartService.addItem(userId, itemId, 1);
                         prepareAndSendMessage(chatId, "✅ Товар добавлен в корзину!");
-                    }
-                    else if (callbackData.startsWith("cart_remove_")) {
+                    } else if (callbackData.startsWith("cart_remove_")) {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
                         boolean removed = cartService.removeItemFromCart(userId, itemId);
 
@@ -151,8 +167,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                         } else {
                             prepareAndSendMessage(chatId, "❌ Товар не найден в корзине");
                         }
-                    }
-                    else if (callbackData.startsWith("category_")) {
+                    } else if (callbackData.startsWith("category_")) {
                         Long categoryId = Long.parseLong(callbackData.split("_")[1]);
                         Category category = categoryRepository.findById(categoryId).orElseThrow();
                         executeEditMessageText("Категория:" + category.getName(), chatId, messageId, keyboardFactory.createItemsByCategoriesKeyboard(categoryId));
@@ -233,13 +248,72 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         if (itemsCount > 0) {
             BigDecimal total = cartService.calculateTotal(userId);
-            executeEditMessageText("Заказ оформлен! 🚀\nСумма: " + total + "₽", chatId, messageId, getMainMenuKeyboard());
-            cartService.clearCart(userId);
+
+            // Создаем клавиатуру с кнопкой оплаты
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+            InlineKeyboardButton payButton = new InlineKeyboardButton();
+            payButton.setText("💳 Оплатить " + total + "₽");
+            payButton.setCallbackData("process_payment"); // ← Вот этот callback!
+
+            InlineKeyboardButton cancelButton = new InlineKeyboardButton();
+            cancelButton.setText("❌ Отменить");
+            cancelButton.setCallbackData("cancel_payment"); // ← И этот!
+
+            rows.add(List.of(payButton));
+            rows.add(List.of(cancelButton));
+
+            InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+            keyboard.setKeyboard(rows);
+
+            executeEditMessageText(
+                    "✅ Заказ оформлен!\nСумма к оплате: " + total + "₽",
+                    chatId,
+                    messageId,
+                    keyboard
+            );
+
         } else {
             prepareAndSendMessage(chatId, "❌ Корзина пуста!");
         }
     }
+
+
+    private void handleProcessPayment(Long userId, Long chatId) {
+        try {
+            // Получаем корзину пользователя
+            List<CartItem> cartItems = cartService.getCartItems(userId);
+            BigDecimal total = cartService.calculateTotal(userId);
+
+            // Создаем инвойс
+            SendInvoice invoice = new SendInvoice();
+            invoice.setChatId(String.valueOf(chatId));
+            invoice.setTitle("💳 Оплата заказа");
+            invoice.setDescription("Оплата товаров из корзины");
+            invoice.setPayload("order_" + System.currentTimeMillis());
+            invoice.setProviderToken("1744374395:TEST:f69ed41d386338b7d598"); // Пока тестовый токен
+            invoice.setCurrency("RUB");
+
+            // Добавляем товары
+            List<LabeledPrice> prices = new ArrayList<>();
+            for (CartItem item : cartItems) {
+                prices.add(new LabeledPrice(
+                        item.getItem().getName() + " x" + item.getQuantity(),
+                        item.getPrice().multiply(BigDecimal.valueOf(100)).intValue()
+                ));
+            }
+            invoice.setPrices(prices);
+
+            invoice.setNeedPhoneNumber(false);
+            invoice.setNeedEmail(false);
+            invoice.setNeedShippingAddress(false);
+            invoice.setIsFlexible(false);
+
+            // Отправляем инвойс
+            execute(invoice);
+
+        } catch (Exception e) {
+            prepareAndSendMessage(chatId, "❌ Ошибка при создании счета оплаты");
+        }
+    }
 }
-
-
-

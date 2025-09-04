@@ -10,10 +10,8 @@ import ru.arapov.firstnormaltelegrambot.models.Item;
 import ru.arapov.firstnormaltelegrambot.repositories.CategoryRepository;
 import ru.arapov.firstnormaltelegrambot.repositories.ItemRepository;
 import ru.arapov.firstnormaltelegrambot.services.CartService;
-
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Component
 public class KeyboardFactory {
@@ -173,5 +171,7 @@ public class KeyboardFactory {
 
         return new InlineKeyboardMarkup(rows);
     }
+
+
 
 }
