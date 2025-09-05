@@ -9,7 +9,6 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
-import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -23,10 +22,8 @@ import ru.arapov.firstnormaltelegrambot.repositories.CategoryRepository;
 import ru.arapov.firstnormaltelegrambot.repositories.ItemRepository;
 import ru.arapov.firstnormaltelegrambot.services.CartService;
 import ru.arapov.firstnormaltelegrambot.services.RegistryService;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static ru.arapov.firstnormaltelegrambot.factories.KeyboardFactory.getMainMenuKeyboard;
@@ -51,9 +48,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Autowired
     private CartService cartService;
-
-    private static final String HELP_MESSAGE = "/start - начинает работу бота\n" + "/data - хранимые нами ваши данные\n" + "/deletedata - удаление ваших данных";
-
 
     public TelegramBot(
             @Value("${bot.token}") String botToken,
@@ -85,7 +79,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     break;
 
                 case "/help":
-                    prepareAndSendMessage(chatId, HELP_MESSAGE);
+                    handleHelpCommand(chatId);
                     break;
 
                 default:
@@ -130,7 +124,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     executeEditMessageText("Главное меню:", chatId, messageId, getMainMenuKeyboard());
                     break;
                 case "categories_list":
-                    executeEditMessageText("Выбери категорию:", chatId, messageId, keyboardFactory.createCategoryKeyboard());
+                    executeEditMessageText("Выберите категорию товаров:", chatId, messageId, keyboardFactory.createCategoryKeyboard());
                     break;
                 case "category_all":
                     executeEditMessageText("Все товары:", chatId, messageId,
@@ -143,10 +137,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case "cancel_payment":
                     executeEditMessageText("Оплата отменена", chatId, messageId, getMainMenuKeyboard());
                     break;
-//                case "test_payment":
-//                    handleTestPayment(userId, chatId);
-//                    break;
-
                 default:
                     if (callbackData.startsWith("item_detail_")) {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
@@ -178,7 +168,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void startCommandReceived(long chatId, String name) {
-        String answer = EmojiParser.parseToUnicode("Привет, " + name + "!" + "\uD83D\uDD95" + "\n" + "Для информации о командах введите /help");
+        String answer = EmojiParser.parseToUnicode("Привет, " + name + "!" + "\uD83D\uDC4B" + "\n" + "Если возникли вопросы\uD83D\uDC49 /help");
 
         sendMessage(chatId, answer);
     }
@@ -314,6 +304,35 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         } catch (Exception e) {
             prepareAndSendMessage(chatId, "❌ Ошибка при создании счета оплаты");
+        }
+    }
+
+    private void handleHelpCommand(Long chatId) {
+        String helpText = """
+        🚗 *CarStudio16 - Автоаксессуары*
+        
+        *⚡️ Быстрое оформление заказа:*
+        1. Выбери товары в каталоге
+        2. Добавь в корзину
+        3. Оплати безопасно через Telegram
+        
+        *📦 Доставка по России - 2-5 дней*
+        *✅ Гарантия 1 год на все товары*
+        
+        *💬 Нужна помощь?*
+        Пиши нам: @carStudioSupport
+        
+        Для начала работы нажмите /start
+        """;
+
+        try {
+            execute(SendMessage.builder()
+                    .chatId(chatId.toString())
+                    .text(helpText)
+                    .parseMode("Markdown")
+                    .build());
+        } catch (TelegramApiException e) {
+            log.error("help command error", e.getMessage());
         }
     }
 }
