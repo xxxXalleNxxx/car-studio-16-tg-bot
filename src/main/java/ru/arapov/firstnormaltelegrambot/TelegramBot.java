@@ -22,9 +22,11 @@ import ru.arapov.firstnormaltelegrambot.repositories.CategoryRepository;
 import ru.arapov.firstnormaltelegrambot.repositories.ItemRepository;
 import ru.arapov.firstnormaltelegrambot.services.CartService;
 import ru.arapov.firstnormaltelegrambot.services.RegistryService;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static ru.arapov.firstnormaltelegrambot.factories.KeyboardFactory.getMainMenuKeyboard;
 
@@ -141,9 +143,16 @@ public class TelegramBot extends TelegramLongPollingBot {
                     if (callbackData.startsWith("item_detail_")) {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
                         Item item = itemRepository.findById(itemId).orElseThrow();
+                        Long categoryId = item.getCategory().getId();
                         String itemText = "Товар: " + item.getName() + "\nЦена: " + item.getPrice() + "₽";
 
-                        executeEditMessageText(itemText, chatId, messageId, keyboardFactory.createItemDetailKeyboard(itemId));
+                        executeEditMessageText(itemText, chatId, messageId, keyboardFactory.createItemDetailKeyboard(itemId, categoryId));
+                    } else if (callbackData.startsWith("back_to_category_")) {
+                        Long categoryId = Long.parseLong(callbackData.split("_")[3]);
+                        Category category = categoryRepository.findById(categoryId).orElseThrow();
+
+                        executeEditMessageText("Категория: " + category.getName(),
+                                chatId, messageId, keyboardFactory.createItemsByCategoriesKeyboard((categoryId)));
                     } else if (callbackData.startsWith("cart_add_")) {
                         Long itemId = Long.parseLong(callbackData.split("_")[2]);
                         cartService.addItem(userId, itemId, 1);
@@ -272,58 +281,72 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void handleProcessPayment(Long userId, Long chatId) {
         try {
             // Получаем корзину пользователя
-            List<CartItem> cartItems = cartService.getCartItems(userId);
             BigDecimal total = cartService.calculateTotal(userId);
 
             // Создаем инвойс
-            SendInvoice invoice = new SendInvoice();
-            invoice.setChatId(String.valueOf(chatId));
-            invoice.setTitle("💳 Оплата заказа");
-            invoice.setDescription("Оплата товаров из корзины");
-            invoice.setPayload("order_" + System.currentTimeMillis());
-            invoice.setProviderToken("1744374395:TEST:f69ed41d386338b7d598"); // Пока тестовый токен
-            invoice.setCurrency("RUB");
-
-            // Добавляем товары
-            List<LabeledPrice> prices = new ArrayList<>();
-            for (CartItem item : cartItems) {
-                prices.add(new LabeledPrice(
-                        item.getItem().getName() + " x" + item.getQuantity(),
-                        item.getPrice().multiply(BigDecimal.valueOf(100)).intValue()
-                ));
-            }
-            invoice.setPrices(prices);
-
-            invoice.setNeedPhoneNumber(false);
-            invoice.setNeedEmail(false);
-            invoice.setNeedShippingAddress(false);
-            invoice.setIsFlexible(false);
+            SendInvoice invoice = createInvoiceFromCart(chatId, userId);
 
             // Отправляем инвойс
             execute(invoice);
 
         } catch (Exception e) {
+            log.error(e.getMessage());
             prepareAndSendMessage(chatId, "❌ Ошибка при создании счета оплаты");
         }
     }
 
+    private SendInvoice createInvoiceFromCart(Long chatId, Long userId) {
+        List<CartItem> cartItems = cartService.getCartItems(userId);
+
+        List<LabeledPrice> prices = cartItems.stream()
+                .map(cartItem -> new LabeledPrice(
+                        cartItem.getItem().getName() + " x" + cartItem.getQuantity(), // ← quantity в названии
+                        cartItem.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())) // ← умножаем цену на quantity!
+                                .multiply(BigDecimal.valueOf(100)).intValue() // ← переводим в копейки
+                ))
+                .collect(Collectors.toList());
+
+        // Проверяем что считает правильно
+        System.out.println("🟢 Cart items: " + cartItems.size());
+        for (CartItem item : cartItems) {
+            System.out.println("🟢 " + item.getItem().getName() + " x" + item.getQuantity() +
+                    " = " + item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())) + "₽");
+        }
+
+        SendInvoice invoice = new SendInvoice();
+        invoice.setChatId(String.valueOf(chatId));
+        invoice.setTitle("💳 Оплата корзины");
+        invoice.setDescription("Оплата товаров из вашей корзины");
+        invoice.setPayload("cart_" + System.currentTimeMillis() + "_" + userId);
+        invoice.setProviderToken("1744374395:TEST:f69ed41d386338b7d598");
+        invoice.setCurrency("RUB");
+        invoice.setPrices(prices);
+
+        invoice.setNeedPhoneNumber(false);
+        invoice.setNeedEmail(false);
+        invoice.setNeedShippingAddress(false);
+        invoice.setIsFlexible(false);
+
+        return invoice;
+    }
+
     private void handleHelpCommand(Long chatId) {
         String helpText = """
-        🚗 *CarStudio16 - Автоаксессуары*
-        
-        *⚡️ Быстрое оформление заказа:*
-        1. Выбери товары в каталоге
-        2. Добавь в корзину
-        3. Оплати безопасно через Telegram
-        
-        *📦 Доставка по России - 2-5 дней*
-        *✅ Гарантия 1 год на все товары*
-        
-        *💬 Нужна помощь?*
-        Пиши нам: @carStudioSupport
-        
-        Для начала работы нажмите /start
-        """;
+                🚗 *CarStudio16 - Автоаксессуары*
+                        
+                *⚡️ Быстрое оформление заказа:*
+                1. Выбери товары в каталоге
+                2. Добавь в корзину
+                3. Оплати безопасно через Telegram
+                        
+                *📦 Доставка по России - 2-5 дней*
+                *✅ Гарантия 1 год на все товары*
+                        
+                *💬 Нужна помощь?*
+                Пиши нам: @carStudioSupport
+                        
+                Для начала работы нажмите /start
+                """;
 
         try {
             execute(SendMessage.builder()

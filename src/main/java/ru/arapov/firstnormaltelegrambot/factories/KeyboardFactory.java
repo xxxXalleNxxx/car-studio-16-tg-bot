@@ -10,6 +10,7 @@ import ru.arapov.firstnormaltelegrambot.models.Item;
 import ru.arapov.firstnormaltelegrambot.repositories.CategoryRepository;
 import ru.arapov.firstnormaltelegrambot.repositories.ItemRepository;
 import ru.arapov.firstnormaltelegrambot.services.CartService;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -120,15 +121,16 @@ public class KeyboardFactory {
             rows.add(List.of(categoryButton));
         }
 
-        InlineKeyboardButton allItemsButton = new InlineKeyboardButton();
-        allItemsButton.setText("Все товары");
-        allItemsButton.setCallbackData("category_all");
-        rows.add(List.of(allItemsButton));
+        InlineKeyboardButton mainButton = new InlineKeyboardButton();
+        mainButton.setText("◀️ Главное меню");
+        mainButton.setCallbackData("main_menu");
+        rows.add(List.of(mainButton));
 
         return new InlineKeyboardMarkup(rows);
     }
 
-    public InlineKeyboardMarkup createItemDetailKeyboard(Long itemId) {
+    public InlineKeyboardMarkup createItemDetailKeyboard(Long itemId, Long categoryId) {
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         InlineKeyboardButton addToCartButton = new InlineKeyboardButton();
@@ -136,11 +138,11 @@ public class KeyboardFactory {
         addToCartButton.setCallbackData("cart_add_" + itemId);
 
         InlineKeyboardButton backButton = new InlineKeyboardButton();
-        backButton.setText("◀️ К товарам");
-        backButton.setCallbackData("items_list");
+        backButton.setText("◀️ Назад");
+        backButton.setCallbackData("back_to_category_" + categoryId);
+        rows.add(List.of(backButton));
 
         rows.add(List.of(addToCartButton));
-        rows.add(List.of(backButton));
 
         return new InlineKeyboardMarkup(rows);
     }
@@ -171,7 +173,6 @@ public class KeyboardFactory {
 
         return new InlineKeyboardMarkup(rows);
     }
-
 
 
 }
