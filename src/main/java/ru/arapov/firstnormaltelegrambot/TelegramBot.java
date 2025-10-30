@@ -110,18 +110,15 @@ public class TelegramBot extends TelegramLongPollingBot {
                     showCart(userId, chatId, (int) messageId);
                     break;
 
-                // Очистка корзины
                 case "cart_clear":
                     cartService.clearCart(userId);
                     executeEditMessageText("Корзина очищена 🧹", chatId, messageId, getMainMenuKeyboard());
                     break;
 
-                // Оформление заказа
                 case "cart_order":
                     handleOrder(userId, chatId, (int) messageId);
                     break;
 
-                // Главное меню
                 case "main_menu":
                     executeEditMessageText("Главное меню:", chatId, messageId, getMainMenuKeyboard());
                     break;
@@ -248,16 +245,15 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (itemsCount > 0) {
             BigDecimal total = cartService.calculateTotal(userId);
 
-            // Создаем клавиатуру с кнопкой оплаты
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
             InlineKeyboardButton payButton = new InlineKeyboardButton();
             payButton.setText("💳 Оплатить " + total + "₽");
-            payButton.setCallbackData("process_payment"); // ← Вот этот callback!
+            payButton.setCallbackData("process_payment");
 
             InlineKeyboardButton cancelButton = new InlineKeyboardButton();
             cancelButton.setText("❌ Отменить");
-            cancelButton.setCallbackData("cancel_payment"); // ← И этот!
+            cancelButton.setCallbackData("cancel_payment");
 
             rows.add(List.of(payButton));
             rows.add(List.of(cancelButton));
@@ -280,13 +276,10 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void handleProcessPayment(Long userId, Long chatId) {
         try {
-            // Получаем корзину пользователя
             BigDecimal total = cartService.calculateTotal(userId);
 
-            // Создаем инвойс
             SendInvoice invoice = createInvoiceFromCart(chatId, userId);
 
-            // Отправляем инвойс
             execute(invoice);
 
         } catch (Exception e) {
@@ -300,13 +293,12 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         List<LabeledPrice> prices = cartItems.stream()
                 .map(cartItem -> new LabeledPrice(
-                        cartItem.getItem().getName() + " x" + cartItem.getQuantity(), // ← quantity в названии
-                        cartItem.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())) // ← умножаем цену на quantity!
-                                .multiply(BigDecimal.valueOf(100)).intValue() // ← переводим в копейки
+                        cartItem.getItem().getName() + " x" + cartItem.getQuantity(),
+                        cartItem.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()))
+                                .multiply(BigDecimal.valueOf(100)).intValue()
                 ))
                 .collect(Collectors.toList());
 
-        // Проверяем что считает правильно
         System.out.println("🟢 Cart items: " + cartItems.size());
         for (CartItem item : cartItems) {
             System.out.println("🟢 " + item.getItem().getName() + " x" + item.getQuantity() +
