@@ -68,7 +68,7 @@ public class CartService {
     public void clearCart(Long userId) {
         cartRepository.findByUserId(userId)
                 .ifPresent(cart -> {
-                    cart.getItems().clear(); // Каскадное удаление
+                    cart.getItems().clear();
                     cartRepository.save(cart);
                 });
     }
