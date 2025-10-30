@@ -77,7 +77,6 @@ public class KeyboardFactory {
         List<CartItem> cartItems = cartService.getCartItems(userId);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        // Товары в корзине (каждый товар - отдельная кнопка для удаления)
         for (CartItem cartItem : cartItems) {
             InlineKeyboardButton itemButton = new InlineKeyboardButton();
             itemButton.setText("🗑️ " + cartItem.getItem().getName() + " x" + cartItem.getQuantity());
@@ -85,22 +84,18 @@ public class KeyboardFactory {
             rows.add(List.of(itemButton));
         }
 
-        // Кнопка очистки корзины
         InlineKeyboardButton clearButton = new InlineKeyboardButton();
         clearButton.setText("🧹 Очистить корзину");
         clearButton.setCallbackData("cart_clear");
 
-        // Кнопка оформления заказа
         InlineKeyboardButton orderButton = new InlineKeyboardButton();
         orderButton.setText("🚀 Оформить заказ");
         orderButton.setCallbackData("cart_order");
 
-        // Кнопка назад в меню
         InlineKeyboardButton backButton = new InlineKeyboardButton();
         backButton.setText("◀️ В главное меню");
         backButton.setCallbackData("main_menu");
 
-        // Добавляем кнопки управления
         rows.add(List.of(clearButton));
         rows.add(List.of(orderButton));
         rows.add(List.of(backButton));
